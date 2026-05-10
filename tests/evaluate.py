@@ -4,14 +4,14 @@ import glob
 import requests
 from typing import List, Dict
 
-API_URL = "http://localhost:8000/chat"
+API_URL = "https://shl-assessment-recommender-4k5e.onrender.com/chat"
 
 def run_evaluation():
-    print("Starting Evaluation against Local API...")
+    print("Starting Evaluation against Live Render API...")
     
     # Check health
     try:
-        health = requests.get("http://localhost:8000/health").json()
+        health = requests.get("https://shl-assessment-recommender-4k5e.onrender.com/health").json()
         print(f"Health Check: {health['status']}")
     except Exception as e:
         print(f"Failed to reach API: {e}")
