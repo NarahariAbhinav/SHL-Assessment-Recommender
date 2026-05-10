@@ -2,15 +2,21 @@ import json
 import os
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import google.generativeai as genai
 
 class CatalogRetriever:
-    def __init__(self, catalog_path=None, model_name="all-MiniLM-L6-v2"):
+    def __init__(self, catalog_path=None, model_name="models/gemini-embedding-2"):
         if catalog_path is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             catalog_path = os.path.join(base_dir, "data", "shl_product_catalog_clean.json")
             
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        
+        # Configure genai in case it hasn't been globally yet
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if api_key:
+            genai.configure(api_key=api_key)
+
         with open(catalog_path, 'r', encoding='utf-8') as f:
             self.catalog = json.load(f)
         
@@ -27,17 +33,28 @@ class CatalogRetriever:
             self.doc_texts.append(text)
             self.documents.append(item)
             
-        print("Building FAISS index...")
-        self.embeddings = self.model.encode(self.doc_texts, show_progress_bar=False)
+        print("Building FAISS index with Gemini Embeddings...")
+        
+        # Batch embed 100 items at a time to stay under any payload limits
+        all_embeddings = []
+        batch_size = 100
+        for i in range(0, len(self.doc_texts), batch_size):
+            batch = self.doc_texts[i:i+batch_size]
+            response = genai.embed_content(model=self.model_name, content=batch)
+            all_embeddings.extend(response['embedding'])
+            
+        self.embeddings = np.array(all_embeddings).astype('float32')
         self.dimension = self.embeddings.shape[1]
         
         self.index = faiss.IndexFlatL2(self.dimension)
-        self.index.add(np.array(self.embeddings).astype('float32'))
+        self.index.add(self.embeddings)
         print(f"Index built with {self.index.ntotal} items.")
 
     def search(self, query: str, top_k: int = 10):
-        query_embedding = self.model.encode([query])
-        distances, indices = self.index.search(np.array(query_embedding).astype('float32'), top_k)
+        response = genai.embed_content(model=self.model_name, content=query)
+        query_embedding = np.array([response['embedding']]).astype('float32')
+        
+        distances, indices = self.index.search(query_embedding, top_k)
         
         results = []
         for i, idx in enumerate(indices[0]):
@@ -46,7 +63,6 @@ class CatalogRetriever:
                 results.append({
                     "name": item.get("name", ""),
                     "url": item.get("link", ""),
-                    # Test type K=Knowledge, P=Personality, A=Aptitude etc. We can map from keys or default.
                     "test_type": self._extract_test_type(item),
                     "description": item.get("description", ""),
                     "score": float(distances[0][i])
@@ -54,10 +70,9 @@ class CatalogRetriever:
         return results
 
     def _extract_test_type(self, item) -> str:
-        # The schema requires test_type. We map keys to characters based on typical SHL types if possible, or just default to "K"
         keys = " ".join(item.get("keys", [])).lower()
         if "personality" in keys or "behavior" in keys: return "P"
         if "ability" in keys or "aptitude" in keys: return "A"
         if "competencies" in keys: return "C"
         if "biodata" in keys: return "B"
-        return "K" # Default Knowledge/Skill
+        return "K"
