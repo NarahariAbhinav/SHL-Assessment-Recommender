@@ -553,7 +553,7 @@
             scrollToBottom();
 
             try {
-                const response = await fetch('https://shl-assessment-recommender-4k5e.onrender.com/chat', {
+                const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ messages: messages })
