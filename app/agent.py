@@ -76,7 +76,13 @@ def generate_response(chat_request: ChatRequest) -> ChatResponse:
             generation_config=genai.GenerationConfig(
                 response_mime_type="application/json",
                 temperature=0.1
-            )
+            ),
+            safety_settings={
+                genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+                genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: genai.types.HarmBlockThreshold.BLOCK_NONE,
+                genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+                genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+            }
         )
         
         # Parse output
@@ -96,7 +102,7 @@ def generate_response(chat_request: ChatRequest) -> ChatResponse:
         print(f"Generation error: {e}")
         # Fallback response
         return ChatResponse(
-            reply="I'm sorry, I encountered an error processing your request.",
+            reply=f"I'm sorry, I encountered an error processing your request. Detailed error: {str(e)}",
             recommendations=[],
             end_of_conversation=False
         )
